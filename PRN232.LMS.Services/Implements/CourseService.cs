@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PRN232.LMS.Repositories.Entities;
 using PRN232.LMS.Repositories.Generic;
+using PRN232.LMS.Services.BusinessModels;
 using PRN232.LMS.Services.Common;
 using PRN232.LMS.Services.Interfaces;
 using PRN232.LMS.Services.RequestModels;
@@ -27,7 +28,6 @@ public class CourseService : ICourseService
     public async Task<ApiResponse<PagedResult<CourseResponse>>> GetAllAsync(QueryParameters query)
     {
         var courses = _courseRepository.GetAll();
-
         var expand = query.Expand?.ToLower() ?? "";
 
         if (expand.Contains("semester"))
@@ -38,8 +38,7 @@ public class CourseService : ICourseService
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            courses = courses.Where(x =>
-                x.CourseName.Contains(query.Search));
+            courses = courses.Where(x => x.CourseName.Contains(query.Search));
         }
 
         courses = query.Sort switch
@@ -53,34 +52,60 @@ public class CourseService : ICourseService
 
         var totalItems = await courses.CountAsync();
 
-        var data = await courses
+        var courseEntities = await courses
             .Skip((query.Page - 1) * query.Size)
             .Take(query.Size)
             .ToListAsync();
 
-        var items = data.Select(x => new CourseResponse
+        var courseModels = courseEntities
+            .Select(x => new CourseModel
+            {
+                CourseId = x.CourseId,
+                CourseName = x.CourseName,
+                SemesterId = x.SemesterId,
+                SubjectId = x.SubjectId,
+                Semester = expand.Contains("semester") && x.Semester != null
+                    ? new SemesterModel
+                    {
+                        SemesterId = x.Semester.SemesterId,
+                        SemesterName = x.Semester.SemesterName,
+                        StartDate = x.Semester.StartDate,
+                        EndDate = x.Semester.EndDate
+                    }
+                    : null,
+                Subject = expand.Contains("subject") && x.Subject != null
+                    ? new SubjectModel
+                    {
+                        SubjectId = x.Subject.SubjectId,
+                        SubjectCode = x.Subject.SubjectCode,
+                        SubjectName = x.Subject.SubjectName,
+                        Credit = x.Subject.Credit
+                    }
+                    : null
+            })
+            .ToList();
+
+        var items = courseModels.Select(x => new CourseResponse
         {
             CourseId = x.CourseId,
             CourseName = x.CourseName,
             SemesterId = x.SemesterId,
             SubjectId = x.SubjectId,
-
-            Semester = expand.Contains("semester") && x.Semester != null
-                ? new SemesterBriefResponse
+            Semester = x.Semester == null
+                ? null
+                : new SemesterBriefResponse
                 {
                     SemesterId = x.Semester.SemesterId,
                     SemesterName = x.Semester.SemesterName
-                }
-                : null,
-
-            Subject = expand.Contains("subject") && x.Subject != null
-                ? new SubjectBriefResponse
+                },
+            Subject = x.Subject == null
+                ? null
+                : new SubjectBriefResponse
                 {
                     SubjectId = x.Subject.SubjectId,
                     SubjectCode = x.Subject.SubjectCode,
                     SubjectName = x.Subject.SubjectName
                 }
-                : null
         }).ToList();
 
         var result = new PagedResult<CourseResponse>
@@ -108,24 +133,48 @@ public class CourseService : ICourseService
         if (course == null)
             return ApiResponse<CourseResponse>.Fail("Course not found");
 
-        return ApiResponse<CourseResponse>.Ok(new CourseResponse
+        var model = new CourseModel
         {
             CourseId = course.CourseId,
             CourseName = course.CourseName,
             SemesterId = course.SemesterId,
             SubjectId = course.SubjectId,
-            Semester = new SemesterBriefResponse
+            Semester = new SemesterModel
             {
                 SemesterId = course.Semester.SemesterId,
-                SemesterName = course.Semester.SemesterName
+                SemesterName = course.Semester.SemesterName,
+                StartDate = course.Semester.StartDate,
+                EndDate = course.Semester.EndDate
             },
-            Subject = new SubjectBriefResponse
+            Subject = new SubjectModel
             {
                 SubjectId = course.Subject.SubjectId,
                 SubjectCode = course.Subject.SubjectCode,
-                SubjectName = course.Subject.SubjectName
+                SubjectName = course.Subject.SubjectName,
+                Credit = course.Subject.Credit
             }
-        });
+        };
+
+        var response = new CourseResponse
+        {
+            CourseId = model.CourseId,
+            CourseName = model.CourseName,
+            SemesterId = model.SemesterId,
+            SubjectId = model.SubjectId,
+            Semester = new SemesterBriefResponse
+            {
+                SemesterId = model.Semester.SemesterId,
+                SemesterName = model.Semester.SemesterName
+            },
+            Subject = new SubjectBriefResponse
+            {
+                SubjectId = model.Subject.SubjectId,
+                SubjectCode = model.Subject.SubjectCode,
+                SubjectName = model.Subject.SubjectName
+            }
+        };
+
+        return ApiResponse<CourseResponse>.Ok(response);
     }
 
     public async Task<ApiResponse<CourseResponse>> CreateAsync(CourseCreateRequest request)
@@ -142,23 +191,34 @@ public class CourseService : ICourseService
         if (!subjectExists)
             return ApiResponse<CourseResponse>.Fail("Subject not found");
 
-        var course = new Course
+        var model = new CourseModel
         {
             CourseName = request.CourseName,
             SemesterId = request.SemesterId,
             SubjectId = request.SubjectId
         };
 
+        var course = new Course
+        {
+            CourseName = model.CourseName,
+            SemesterId = model.SemesterId,
+            SubjectId = model.SubjectId
+        };
+
         await _courseRepository.AddAsync(course);
         await _courseRepository.SaveChangesAsync();
 
-        return ApiResponse<CourseResponse>.Ok(new CourseResponse
+        model.CourseId = course.CourseId;
+
+        var response = new CourseResponse
         {
-            CourseId = course.CourseId,
-            CourseName = course.CourseName,
-            SemesterId = course.SemesterId,
-            SubjectId = course.SubjectId
-        }, "Course created successfully");
+            CourseId = model.CourseId,
+            CourseName = model.CourseName,
+            SemesterId = model.SemesterId,
+            SubjectId = model.SubjectId
+        };
+
+        return ApiResponse<CourseResponse>.Ok(response, "Course created successfully");
     }
 
     public async Task<ApiResponse<CourseResponse>> UpdateAsync(int id, CourseUpdateRequest request)
@@ -180,20 +240,30 @@ public class CourseService : ICourseService
         if (!subjectExists)
             return ApiResponse<CourseResponse>.Fail("Subject not found");
 
-        course.CourseName = request.CourseName;
-        course.SemesterId = request.SemesterId;
-        course.SubjectId = request.SubjectId;
+        var model = new CourseModel
+        {
+            CourseId = id,
+            CourseName = request.CourseName,
+            SemesterId = request.SemesterId,
+            SubjectId = request.SubjectId
+        };
+
+        course.CourseName = model.CourseName;
+        course.SemesterId = model.SemesterId;
+        course.SubjectId = model.SubjectId;
 
         _courseRepository.Update(course);
         await _courseRepository.SaveChangesAsync();
 
-        return ApiResponse<CourseResponse>.Ok(new CourseResponse
+        var response = new CourseResponse
         {
-            CourseId = course.CourseId,
-            CourseName = course.CourseName,
-            SemesterId = course.SemesterId,
-            SubjectId = course.SubjectId
-        }, "Course updated successfully");
+            CourseId = model.CourseId,
+            CourseName = model.CourseName,
+            SemesterId = model.SemesterId,
+            SubjectId = model.SubjectId
+        };
+
+        return ApiResponse<CourseResponse>.Ok(response, "Course updated successfully");
     }
 
     public async Task<ApiResponse<bool>> DeleteAsync(int id)

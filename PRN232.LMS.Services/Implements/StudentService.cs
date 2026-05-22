@@ -5,6 +5,7 @@ using PRN232.LMS.Services.Common;
 using PRN232.LMS.Services.Interfaces;
 using PRN232.LMS.Services.RequestModels;
 using PRN232.LMS.Services.ResponseModels;
+using PRN232.LMS.Services.BusinessModels;
 
 namespace PRN232.LMS.Services.Implements;
 
@@ -48,9 +49,26 @@ public class StudentService : IStudentService
         // Paging
         var totalItems = await students.CountAsync();
 
-        var items = await students
-            .Skip((query.Page - 1) * query.Size)
-            .Take(query.Size)
+        var studentEntities = await students
+    .Skip((query.Page - 1) * query.Size)
+    .Take(query.Size)
+    .ToListAsync();
+
+
+        // Entity -> BusinessModel
+        var studentModels = studentEntities
+            .Select(x => new StudentModel
+            {
+                StudentId = x.StudentId,
+                FullName = x.FullName,
+                Email = x.Email,
+                DateOfBirth = x.DateOfBirth
+            })
+            .ToList();
+
+
+        // BusinessModel -> ResponseModel
+        var items = studentModels
             .Select(x => new StudentResponse
             {
                 StudentId = x.StudentId,
@@ -58,7 +76,7 @@ public class StudentService : IStudentService
                 Email = x.Email,
                 DateOfBirth = x.DateOfBirth
             })
-            .ToListAsync();
+            .ToList();
 
         var result = new PagedResultObject
         {
@@ -89,13 +107,22 @@ public class StudentService : IStudentService
             return ApiResponse<StudentResponse>
                 .Fail("Student not found");
         }
-
-        var response = new StudentResponse
+        // Entity -> BusinessModel
+        var model = new StudentModel
         {
             StudentId = student.StudentId,
             FullName = student.FullName,
             Email = student.Email,
             DateOfBirth = student.DateOfBirth
+        };
+
+        // BusinessModel -> ResponseModel
+        var response = new StudentResponse
+        {
+            StudentId = model.StudentId,
+            FullName = model.FullName,
+            Email = model.Email,
+            DateOfBirth = model.DateOfBirth
         };
 
         return ApiResponse<StudentResponse>.Ok(response);
@@ -104,23 +131,36 @@ public class StudentService : IStudentService
     public async Task<ApiResponse<StudentResponse>> CreateAsync(
         StudentCreateRequest request)
     {
-        var student = new Student
+        // RequestModel -> BusinessModel
+        var model = new StudentModel
         {
             FullName = request.FullName,
             Email = request.Email,
             DateOfBirth = request.DateOfBirth
         };
 
+        // BusinessModel -> Entity
+        var student = new Student
+        {
+            FullName = model.FullName,
+            Email = model.Email,
+            DateOfBirth = model.DateOfBirth
+        };
+
         await _studentRepository.AddAsync(student);
 
         await _studentRepository.SaveChangesAsync();
 
+        // Entity -> BusinessModel
+        model.StudentId = student.StudentId;
+
+        // BusinessModel -> ResponseModel
         var response = new StudentResponse
         {
-            StudentId = student.StudentId,
-            FullName = student.FullName,
-            Email = student.Email,
-            DateOfBirth = student.DateOfBirth
+            StudentId = model.StudentId,
+            FullName = model.FullName,
+            Email = model.Email,
+            DateOfBirth = model.DateOfBirth
         };
 
         return ApiResponse<StudentResponse>
@@ -139,9 +179,19 @@ public class StudentService : IStudentService
                 .Fail("Student not found");
         }
 
-        student.FullName = request.FullName;
-        student.Email = request.Email;
-        student.DateOfBirth = request.DateOfBirth;
+        // RequestModel -> BusinessModel
+        var model = new StudentModel
+        {
+            StudentId = id,
+            FullName = request.FullName,
+            Email = request.Email,
+            DateOfBirth = request.DateOfBirth
+        };
+
+        // BusinessModel -> Entity
+        student.FullName = model.FullName;
+        student.Email = model.Email;
+        student.DateOfBirth = model.DateOfBirth;
 
         _studentRepository.Update(student);
 
@@ -149,10 +199,10 @@ public class StudentService : IStudentService
 
         var response = new StudentResponse
         {
-            StudentId = student.StudentId,
-            FullName = student.FullName,
-            Email = student.Email,
-            DateOfBirth = student.DateOfBirth
+            StudentId = model.StudentId,
+            FullName = model.FullName,
+            Email = model.Email,
+            DateOfBirth = model.DateOfBirth
         };
 
         return ApiResponse<StudentResponse>

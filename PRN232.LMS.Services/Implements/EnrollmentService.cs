@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PRN232.LMS.Repositories.Entities;
 using PRN232.LMS.Repositories.Generic;
+using PRN232.LMS.Services.BusinessModels;
 using PRN232.LMS.Services.Common;
 using PRN232.LMS.Services.Interfaces;
 using PRN232.LMS.Services.RequestModels;
@@ -44,44 +45,77 @@ public class EnrollmentService : IEnrollmentService
         enrollments = query.Sort switch
         {
             "enrollDate" => enrollments.OrderBy(x => x.EnrollDate),
-
             "-enrollDate" => enrollments.OrderByDescending(x => x.EnrollDate),
-
             _ => enrollments.OrderBy(x => x.EnrollmentId)
         };
 
         var totalItems = await enrollments.CountAsync();
 
-        var data = await enrollments
+        var enrollmentEntities = await enrollments
             .Skip((query.Page - 1) * query.Size)
             .Take(query.Size)
             .ToListAsync();
 
-        var items = data.Select(x => new EnrollmentResponse
-        {
-            EnrollmentId = x.EnrollmentId,
-            StudentId = x.StudentId,
-            CourseId = x.CourseId,
-            EnrollDate = x.EnrollDate,
-            Status = x.Status,
+        // Entity -> BusinessModel
+        var enrollmentModels = enrollmentEntities
+            .Select(x => new EnrollmentModel
+            {
+                EnrollmentId = x.EnrollmentId,
+                StudentId = x.StudentId,
+                CourseId = x.CourseId,
+                EnrollDate = x.EnrollDate,
+                Status = x.Status,
 
-            Student = expand.Contains("student") && x.Student != null
-                ? new StudentBriefResponse
-                {
-                    StudentId = x.Student.StudentId,
-                    FullName = x.Student.FullName,
-                    Email = x.Student.Email
-                }
-                : null,
+                Student = expand.Contains("student") && x.Student != null
+                    ? new StudentModel
+                    {
+                        StudentId = x.Student.StudentId,
+                        FullName = x.Student.FullName,
+                        Email = x.Student.Email,
+                        DateOfBirth = x.Student.DateOfBirth
+                    }
+                    : null,
 
-            Course = expand.Contains("course") && x.Course != null
-                ? new CourseBriefResponse
-                {
-                    CourseId = x.Course.CourseId,
-                    CourseName = x.Course.CourseName
-                }
-                : null
-        }).ToList();
+                Course = expand.Contains("course") && x.Course != null
+                    ? new CourseModel
+                    {
+                        CourseId = x.Course.CourseId,
+                        CourseName = x.Course.CourseName,
+                        SemesterId = x.Course.SemesterId,
+                        SubjectId = x.Course.SubjectId
+                    }
+                    : null
+            })
+            .ToList();
+
+        // BusinessModel -> ResponseModel
+        var items = enrollmentModels
+            .Select(x => new EnrollmentResponse
+            {
+                EnrollmentId = x.EnrollmentId,
+                StudentId = x.StudentId,
+                CourseId = x.CourseId,
+                EnrollDate = x.EnrollDate,
+                Status = x.Status,
+
+                Student = x.Student == null
+                    ? null
+                    : new StudentBriefResponse
+                    {
+                        StudentId = x.Student.StudentId,
+                        FullName = x.Student.FullName,
+                        Email = x.Student.Email
+                    },
+
+                Course = x.Course == null
+                    ? null
+                    : new CourseBriefResponse
+                    {
+                        CourseId = x.Course.CourseId,
+                        CourseName = x.Course.CourseName
+                    }
+            })
+            .ToList();
 
         var result = new PagedResult<EnrollmentResponse>
         {
@@ -115,34 +149,63 @@ public class EnrollmentService : IEnrollmentService
                 .Fail("Enrollment not found");
         }
 
-        return ApiResponse<EnrollmentResponse>.Ok(
-            new EnrollmentResponse
+        // Entity -> BusinessModel
+        var model = new EnrollmentModel
+        {
+            EnrollmentId = enrollment.EnrollmentId,
+            StudentId = enrollment.StudentId,
+            CourseId = enrollment.CourseId,
+            EnrollDate = enrollment.EnrollDate,
+            Status = enrollment.Status,
+
+            Student = new StudentModel
             {
-                EnrollmentId = enrollment.EnrollmentId,
-                StudentId = enrollment.StudentId,
-                CourseId = enrollment.CourseId,
-                EnrollDate = enrollment.EnrollDate,
-                Status = enrollment.Status,
+                StudentId = enrollment.Student.StudentId,
+                FullName = enrollment.Student.FullName,
+                Email = enrollment.Student.Email,
+                DateOfBirth = enrollment.Student.DateOfBirth
+            },
 
-                Student = new StudentBriefResponse
-                {
-                    StudentId = enrollment.Student.StudentId,
-                    FullName = enrollment.Student.FullName,
-                    Email = enrollment.Student.Email
-                },
+            Course = new CourseModel
+            {
+                CourseId = enrollment.Course.CourseId,
+                CourseName = enrollment.Course.CourseName,
+                SemesterId = enrollment.Course.SemesterId,
+                SubjectId = enrollment.Course.SubjectId
+            }
+        };
 
-                Course = new CourseBriefResponse
-                {
-                    CourseId = enrollment.Course.CourseId,
-                    CourseName = enrollment.Course.CourseName
-                }
-            });
+        // BusinessModel -> ResponseModel
+        var response = new EnrollmentResponse
+        {
+            EnrollmentId = model.EnrollmentId,
+            StudentId = model.StudentId,
+            CourseId = model.CourseId,
+            EnrollDate = model.EnrollDate,
+            Status = model.Status,
+
+            Student = new StudentBriefResponse
+            {
+                StudentId = model.Student.StudentId,
+                FullName = model.Student.FullName,
+                Email = model.Student.Email
+            },
+
+            Course = new CourseBriefResponse
+            {
+                CourseId = model.Course.CourseId,
+                CourseName = model.Course.CourseName
+            }
+        };
+
+        return ApiResponse<EnrollmentResponse>.Ok(response);
     }
 
     public async Task<ApiResponse<EnrollmentResponse>> CreateAsync(
         EnrollmentCreateRequest request)
     {
-        var enrollment = new Enrollment
+        // RequestModel -> BusinessModel
+        var model = new EnrollmentModel
         {
             StudentId = request.StudentId,
             CourseId = request.CourseId,
@@ -150,19 +213,33 @@ public class EnrollmentService : IEnrollmentService
             Status = request.Status
         };
 
+        // BusinessModel -> Entity
+        var enrollment = new Enrollment
+        {
+            StudentId = model.StudentId,
+            CourseId = model.CourseId,
+            EnrollDate = model.EnrollDate,
+            Status = model.Status
+        };
+
         await _enrollmentRepository.AddAsync(enrollment);
 
         await _enrollmentRepository.SaveChangesAsync();
 
+        model.EnrollmentId = enrollment.EnrollmentId;
+
+        // BusinessModel -> ResponseModel
+        var response = new EnrollmentResponse
+        {
+            EnrollmentId = model.EnrollmentId,
+            StudentId = model.StudentId,
+            CourseId = model.CourseId,
+            EnrollDate = model.EnrollDate,
+            Status = model.Status
+        };
+
         return ApiResponse<EnrollmentResponse>.Ok(
-            new EnrollmentResponse
-            {
-                EnrollmentId = enrollment.EnrollmentId,
-                StudentId = enrollment.StudentId,
-                CourseId = enrollment.CourseId,
-                EnrollDate = enrollment.EnrollDate,
-                Status = enrollment.Status
-            },
+            response,
             "Enrollment created successfully");
     }
 
@@ -179,24 +256,38 @@ public class EnrollmentService : IEnrollmentService
                 .Fail("Enrollment not found");
         }
 
-        enrollment.StudentId = request.StudentId;
-        enrollment.CourseId = request.CourseId;
-        enrollment.EnrollDate = request.EnrollDate;
-        enrollment.Status = request.Status;
+        // RequestModel -> BusinessModel
+        var model = new EnrollmentModel
+        {
+            EnrollmentId = id,
+            StudentId = request.StudentId,
+            CourseId = request.CourseId,
+            EnrollDate = request.EnrollDate,
+            Status = request.Status
+        };
+
+        // BusinessModel -> Entity
+        enrollment.StudentId = model.StudentId;
+        enrollment.CourseId = model.CourseId;
+        enrollment.EnrollDate = model.EnrollDate;
+        enrollment.Status = model.Status;
 
         _enrollmentRepository.Update(enrollment);
 
         await _enrollmentRepository.SaveChangesAsync();
 
+        // BusinessModel -> ResponseModel
+        var response = new EnrollmentResponse
+        {
+            EnrollmentId = model.EnrollmentId,
+            StudentId = model.StudentId,
+            CourseId = model.CourseId,
+            EnrollDate = model.EnrollDate,
+            Status = model.Status
+        };
+
         return ApiResponse<EnrollmentResponse>.Ok(
-            new EnrollmentResponse
-            {
-                EnrollmentId = enrollment.EnrollmentId,
-                StudentId = enrollment.StudentId,
-                CourseId = enrollment.CourseId,
-                EnrollDate = enrollment.EnrollDate,
-                Status = enrollment.Status
-            },
+            response,
             "Enrollment updated successfully");
     }
 

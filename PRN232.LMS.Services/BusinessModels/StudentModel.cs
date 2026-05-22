@@ -1,4 +1,6 @@
-﻿namespace PRN232.LMS.Services.BusinessModels;
+﻿using PRN232.LMS.Repositories.Entities;
+
+namespace PRN232.LMS.Services.BusinessModels;
 
 public class StudentModel
 {
@@ -9,4 +11,5 @@ public class StudentModel
     public string Email { get; set; } = null!;
 
     public DateTime DateOfBirth { get; set; }
+    public ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();
 }

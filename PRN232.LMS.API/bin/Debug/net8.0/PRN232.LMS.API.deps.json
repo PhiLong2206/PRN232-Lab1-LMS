@@ -9,7 +9,6 @@
       "PRN232.LMS.API/1.0.0": {
         "dependencies": {
           "Microsoft.EntityFrameworkCore.Design": "8.0.8",
-          "PRN232.LMS.Repositories": "1.0.0",
           "PRN232.LMS.Services": "1.0.0",
           "Swashbuckle.AspNetCore": "10.1.7"
         },

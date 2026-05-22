@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PRN232.LMS.Repositories.Entities;
 using PRN232.LMS.Repositories.Generic;
+using PRN232.LMS.Services.BusinessModels;
 using PRN232.LMS.Services.Common;
 using PRN232.LMS.Services.Interfaces;
 using PRN232.LMS.Services.RequestModels;
@@ -31,9 +32,24 @@ public class SemesterService : ISemesterService
 
         var totalItems = await semesters.CountAsync();
 
-        var items = await semesters
+        var semesterEntities = await semesters
             .Skip((query.Page - 1) * query.Size)
             .Take(query.Size)
+            .ToListAsync();
+
+        // Entity -> BusinessModel
+        var semesterModels = semesterEntities
+            .Select(x => new SemesterModel
+            {
+                SemesterId = x.SemesterId,
+                SemesterName = x.SemesterName,
+                StartDate = x.StartDate,
+                EndDate = x.EndDate
+            })
+            .ToList();
+
+        // BusinessModel -> ResponseModel
+        var items = semesterModels
             .Select(x => new SemesterResponse
             {
                 SemesterId = x.SemesterId,
@@ -41,7 +57,7 @@ public class SemesterService : ISemesterService
                 StartDate = x.StartDate,
                 EndDate = x.EndDate
             })
-            .ToListAsync();
+            .ToList();
 
         var result = new PagedResult<SemesterResponse>
         {
@@ -73,12 +89,22 @@ public class SemesterService : ISemesterService
                 .Fail("Semester not found");
         }
 
-        var response = new SemesterResponse
+        // Entity -> BusinessModel
+        var model = new SemesterModel
         {
             SemesterId = semester.SemesterId,
             SemesterName = semester.SemesterName,
             StartDate = semester.StartDate,
             EndDate = semester.EndDate
+        };
+
+        // BusinessModel -> ResponseModel
+        var response = new SemesterResponse
+        {
+            SemesterId = model.SemesterId,
+            SemesterName = model.SemesterName,
+            StartDate = model.StartDate,
+            EndDate = model.EndDate
         };
 
         return ApiResponse<SemesterResponse>.Ok(response);
@@ -87,23 +113,35 @@ public class SemesterService : ISemesterService
     public async Task<ApiResponse<SemesterResponse>> CreateAsync(
         SemesterCreateRequest request)
     {
-        var semester = new Semester
+        // RequestModel -> BusinessModel
+        var model = new SemesterModel
         {
             SemesterName = request.SemesterName,
             StartDate = request.StartDate,
             EndDate = request.EndDate
         };
 
+        // BusinessModel -> Entity
+        var semester = new Semester
+        {
+            SemesterName = model.SemesterName,
+            StartDate = model.StartDate,
+            EndDate = model.EndDate
+        };
+
         await _semesterRepository.AddAsync(semester);
 
         await _semesterRepository.SaveChangesAsync();
 
+        model.SemesterId = semester.SemesterId;
+
+        // BusinessModel -> ResponseModel
         var response = new SemesterResponse
         {
-            SemesterId = semester.SemesterId,
-            SemesterName = semester.SemesterName,
-            StartDate = semester.StartDate,
-            EndDate = semester.EndDate
+            SemesterId = model.SemesterId,
+            SemesterName = model.SemesterName,
+            StartDate = model.StartDate,
+            EndDate = model.EndDate
         };
 
         return ApiResponse<SemesterResponse>
@@ -122,20 +160,31 @@ public class SemesterService : ISemesterService
                 .Fail("Semester not found");
         }
 
-        semester.SemesterName = request.SemesterName;
-        semester.StartDate = request.StartDate;
-        semester.EndDate = request.EndDate;
+        // RequestModel -> BusinessModel
+        var model = new SemesterModel
+        {
+            SemesterId = id,
+            SemesterName = request.SemesterName,
+            StartDate = request.StartDate,
+            EndDate = request.EndDate
+        };
+
+        // BusinessModel -> Entity
+        semester.SemesterName = model.SemesterName;
+        semester.StartDate = model.StartDate;
+        semester.EndDate = model.EndDate;
 
         _semesterRepository.Update(semester);
 
         await _semesterRepository.SaveChangesAsync();
 
+        // BusinessModel -> ResponseModel
         var response = new SemesterResponse
         {
-            SemesterId = semester.SemesterId,
-            SemesterName = semester.SemesterName,
-            StartDate = semester.StartDate,
-            EndDate = semester.EndDate
+            SemesterId = model.SemesterId,
+            SemesterName = model.SemesterName,
+            StartDate = model.StartDate,
+            EndDate = model.EndDate
         };
 
         return ApiResponse<SemesterResponse>
