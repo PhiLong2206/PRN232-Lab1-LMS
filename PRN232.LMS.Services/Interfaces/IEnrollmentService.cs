@@ -16,6 +16,9 @@ public interface IEnrollmentService
     Task<ApiResponse<EnrollmentResponse>> UpdateAsync(
         int id,
         EnrollmentUpdateRequest request);
+    Task<ApiResponse<object>> GetByCourseIdAsync(
+    int courseId,
+    string? expand);
 
     Task<ApiResponse<bool>> DeleteAsync(int id);
 }

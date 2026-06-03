@@ -309,4 +309,57 @@ public class EnrollmentService : IEnrollmentService
         return ApiResponse<bool>
             .Ok(true, "Enrollment deleted successfully");
     }
+    public async Task<ApiResponse<object>> GetByCourseIdAsync(
+    int courseId,
+    string? expand)
+    {
+        var enrollments = _enrollmentRepository
+            .GetAll()
+            .Where(e => e.CourseId == courseId);
+
+        if (expand?.ToLower() == "student")
+        {
+            enrollments = enrollments
+                .Include(e => e.Student);
+
+            var data = await enrollments
+                .Select(e => new
+                {
+                    e.EnrollmentId,
+                    e.CourseId,
+                    e.StudentId,
+                    e.EnrollDate,
+                    e.Status,
+
+                    Student = e.Student == null
+                        ? null
+                        : new
+                        {
+                            e.Student.StudentId,
+                            e.Student.FullName,
+                            e.Student.Email
+                        }
+                })
+                .ToListAsync();
+
+            return ApiResponse<object>.Ok(
+                data,
+                "Enrollments retrieved successfully");
+        }
+
+        var result = await enrollments
+            .Select(e => new
+            {
+                e.EnrollmentId,
+                e.CourseId,
+                e.StudentId,
+                e.EnrollDate,
+                e.Status
+            })
+            .ToListAsync();
+
+        return ApiResponse<object>.Ok(
+            result,
+            "Enrollments retrieved successfully");
+    }
 }

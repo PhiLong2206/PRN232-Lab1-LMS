@@ -34,17 +34,22 @@ app.UseSwagger();
 
 app.UseSwaggerUI();
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 app.UseAuthorization();
 
 app.MapControllers();
-
 using (var scope = app.Services.CreateScope())
 {
-    var dbContext = scope.ServiceProvider
-        .GetRequiredService<LmsDbContext>();
-
-    dbContext.Database.EnsureCreated();
+    try
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<LmsDbContext>();
+        dbContext.Database.EnsureCreated();
+        Console.WriteLine("Database initialized successfully.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Database initialization error: {ex.Message}");
+    }
 }
 app.Run();
